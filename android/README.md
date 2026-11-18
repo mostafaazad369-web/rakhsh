@@ -55,3 +55,9 @@ This is a partial integration milestone. `RakhshVpnService` registers its live s
 - Android TCP/TLS/WS/WSS outbound sockets are created with `TcpSocket`, passed to `VpnService.protect(fd)`, and only then connected.
 - Android builds reject QUIC, KCP, Rama QUIC and raw carriers until their UDP/raw sockets receive equivalent protection.
 - The service remains guarded: it does not establish the TUN or start the engine until VPN permission, config import, foreground notification, routes/MTU and device lifecycle tests are complete.
+
+
+## JNI service lifecycle correction
+
+- `NativeBridge.nativeClearProtector()` now has a matching Rust JNI export, so the Kotlin service teardown does not call a missing native symbol.
+- The VPN service remains intentionally guarded and immediately stops on start; no TUN is established and no traffic is routed until the Android Builder, foreground notification, configuration screen, permission flow, and stop/error lifecycle are implemented and device-tested.
