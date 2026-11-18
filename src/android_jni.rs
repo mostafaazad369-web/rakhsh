@@ -7,8 +7,8 @@ use jni::sys::{jint, jlong};
 use jni::{JNIEnv, JavaVM};
 use std::collections::HashMap;
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Mutex, OnceLock};
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
 
