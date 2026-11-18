@@ -170,7 +170,7 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeVpnParameters(
         let dns = cfg.dns.as_ref()
             .map(|dns| dns.remote.join(","))
             .unwrap_or_default();
-        Ok(format!("{}\\n{}\\n{}", addresses, crate::l3::planned_mtu(&cfg), dns))
+        Ok(format!("{}\n{}\n{}", addresses, crate::l3::planned_mtu(&cfg), dns))
     })();
 
     match result {
