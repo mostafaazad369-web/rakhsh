@@ -132,13 +132,20 @@ class MainActivity : Activity() {
             return
         }
         try {
-            // Each value is independently authenticated/encrypted at rest.
-            store.save("config", config)
-            store.save("token", token)
-            store.save("static_secret", secret)
+            val validationError = NativeBridge.nativeValidateConfig(config, token, secret)
+            if (validationError != null) {
+                status.text = "تنظیمات معتبر نیست: $validationError"
+                return
+            }
+            // Commit all encrypted profile values together to avoid partial saves.
+            store.saveAll(mapOf(
+                "config" to config,
+                "token" to token,
+                "static_secret" to secret
+            ))
             tokenInput.text.clear()
             secretInput.text.clear()
-            status.text = "تنظیمات با موفقیت و به‌صورت رمزگذاری‌شده ذخیره شد. اتصال VPN هنوز غیرفعال است."
+            status.text = "تنظیمات معتبر است و پروفایل به‌صورت رمزگذاری‌شده ذخیره شد. اتصال VPN هنوز غیرفعال است."
         } catch (error: Exception) {
             status.text = "ذخیره امن ناموفق بود: ${error.message ?: "خطای نامشخص"}"
         }
