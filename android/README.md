@@ -8,14 +8,16 @@ This directory is the initial Android application shell. It is not yet a working
 - Launcher activity that clearly reports that native integration is pending.
 - Android `VpnService` declaration and guarded service class (it intentionally does not establish a VPN yet).
 - Rust in-memory TOML parser and Android-only L3 entry point that adopts the VpnService TUN FD via `tun-rs::AsyncDevice::from_fd`.
+- JNI registration of the live `VpnService` object so Rust can call `VpnService.protect(fd)`.
+- Android TCP/TLS/WS/WSS carrier sockets are created first, protected before `connect()`, then connected. Android currently rejects QUIC, KCP, Rama QUIC and raw carriers until their UDP/raw socket paths can be protected.
 - `SecretStore.kt` uses Android Keystore AES-256-GCM for the `token` and `static_secret` values.
 - Debug APK build is provided by the repository's Android Actions workflow.
 
 ## Required before enabling VPN traffic
 
-1. Add a Rust Android `cdylib` target and a JNI bridge with a managed Tokio runtime and reliable start/stop cancellation.
+1. Complete build and runtime validation of the Rust Android `cdylib` target and JNI bridge with managed Tokio runtime and reliable start/stop cancellation.
 2. Complete and test the initial L3 FD-adoption path against the pinned `tun-rs = 2.8.13` version; Android must configure addresses, routes and MTU in `VpnService.Builder` and must not create a second TUN device.
-3. Add a socket-protection abstraction and ensure every outbound TCP, UDP, QUIC, KCP and other carrier socket is protected with `VpnService.protect()` before connecting or binding as appropriate. The current native carriers create sockets in multiple modules, so this must be audited end to end.
+3. Extend socket protection to UDP, QUIC, KCP, Rama QUIC and raw carriers. Only TCP-based carriers are currently allowed on Android; all other carrier types are rejected in the Android build path.
 4. Pass credentials from `SecretStore` to Rust only in memory; never write plaintext secrets to a TOML file or logs.
 5. Add device tests for VPN permission approval, reconnect, stop, IPv4/IPv6, DNS, traffic routing, and failure recovery.
 6. Only after those tests pass should the service call `Builder.establish()` and start the native tunnel.
@@ -44,8 +46,4 @@ The Android-only Rust library now exports JNI entry points declared by
   runtime and starts the Rust engine task.
 - `nativeStop(taskId)` aborts the corresponding task.
 
-This is only the native bridge layer. The current `RakhshVpnService` remains
-intentionally guarded and does not establish a TUN interface or call JNI yet.
-Do not enable VPN routing until the service lifecycle is wired and every
-outbound carrier socket is protected with `VpnService.protect(fd)` before its
-first connect/send operation.
+This is a partial integration milestone. `RakhshVpnService` registers its live service instance with JNI, and Rust TCP carrier sockets call `VpnService.protect(fd)` before connecting. The service still intentionally does not establish a TUN or call `nativeStart`: Android VPN permission flow, config import, foreground notification, Builder address/routes/MTU, full service lifecycle, and device testing remain incomplete. UDP/QUIC/KCP/Rama/raw carriers are rejected on Android until their socket paths are protected.
