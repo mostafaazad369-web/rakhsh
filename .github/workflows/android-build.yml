@@ -1,4 +1,4 @@
-name: Android debug build
+name: Android native and debug APK build
 
 on:
   workflow_dispatch:
@@ -7,17 +7,27 @@ on:
       - android/secure-credential-store
     paths:
       - "android/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/android-build.yml"
 
 permissions:
   contents: read
 
 jobs:
-  assemble-debug:
+  android-arm64:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out Rakhsh
         uses: actions/checkout@v4
+
+      - name: Check out Shabdiz sibling dependency
+        uses: actions/checkout@v4
+        with:
+          repository: CluvexStudio/shabdiz
+          ref: v0.1.0
+          path: shabdiz
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -25,17 +35,38 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android NDK
+        run: |
+          sdkmanager "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_PATH"
+
+      - name: Install Rust Android target and cargo-ndk
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Build Rakhsh Rust shared library (Android ARM64)
+        run: |
+          cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --release -p rakhsh --lib --no-default-features
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Assemble debug APK
+      - name: Assemble Android debug APK
         run: gradle -p android assembleDebug
 
-      - name: Upload debug APK
+      - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rakhsh-android-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: rakhsh-android-arm64-debug
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/src/main/jniLibs/arm64-v8a/librakhsh.so
           if-no-files-found: error
