@@ -310,8 +310,8 @@ async fn udp_associate(e: &Engine, mut ctl: TcpStream, peer: SocketAddr, tag: &s
     let local = ctl.local_addr()?;
     let relay = Arc::new(UdpSocket::bind(SocketAddr::new(local.ip(), 0)).await?);
     let bnd = relay.local_addr()?;
-    let direct = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
-    let direct6 = UdpSocket::bind("[::]:0").await.ok().map(Arc::new);
+    let direct = Arc::new(bind_engine_udp("0.0.0.0:0")?);
+    let direct6 = bind_engine_udp("[::]:0").ok().map(Arc::new);
     proxy::socks_reply_addr(&mut ctl, bnd).await?;
     if e.access_log {
         info!("{peer} udp-associate relay on {bnd}");
@@ -447,6 +447,51 @@ async fn reply_denied(s: &mut TcpStream, k: Kind) {
     }
 }
 
+/// Open an outbound TCP socket outside the Android VpnService TUN.
+async fn connect_engine_tcp(addr: &str) -> std::io::Result<TcpStream> {
+    #[cfg(target_os = "android")]
+    {
+        use std::net::SocketAddr;
+        use std::os::fd::AsRawFd;
+        use tokio::net::TcpSocket;
+
+        let mut last_error = None;
+        for address in tokio::net::lookup_host(addr).await? {
+            let socket = match address {
+                SocketAddr::V4(_) => TcpSocket::new_v4()?,
+                SocketAddr::V6(_) => TcpSocket::new_v6()?,
+            };
+            crate::android_jni::protect_socket(socket.as_raw_fd())
+                .map_err(std::io::Error::other)?;
+            match socket.connect(address).await {
+                Ok(stream) => return Ok(stream),
+                Err(error) => last_error = Some(error),
+            }
+        }
+        Err(last_error.unwrap_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no TCP addresses resolved")
+        }))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        TcpStream::connect(addr).await
+    }
+}
+
+#[cfg(target_os = "android")]
+fn bind_engine_udp(addr: &str) -> std::io::Result<UdpSocket> {
+    use std::os::fd::AsRawFd;
+    let socket = std::net::UdpSocket::bind(addr)?;
+    crate::android_jni::protect_socket(socket.as_raw_fd()).map_err(std::io::Error::other)?;
+    socket.set_nonblocking(true)?;
+    UdpSocket::from_std(socket)
+}
+
+#[cfg(not(target_os = "android"))]
+fn bind_engine_udp(addr: &str) -> std::io::Result<UdpSocket> {
+    UdpSocket::bind(addr)
+}
+
 async fn connect_direct(dest: &Dest, resolved: &[IpAddr]) -> std::io::Result<TcpStream> {
     let mut addrs: Vec<SocketAddr> = match &dest.host {
         Host::Ip(ip) => vec![SocketAddr::new(*ip, dest.port)],
@@ -466,7 +511,7 @@ async fn connect_direct(dest: &Dest, resolved: &[IpAddr]) -> std::io::Result<Tcp
     addrs.sort_by_key(|a| a.is_ipv6());
     let mut last = std::io::Error::new(std::io::ErrorKind::NotFound, "no addresses for host");
     for a in addrs {
-        match timeout(Duration::from_secs(6), TcpStream::connect(a)).await {
+        match timeout(Duration::from_secs(6), connect_engine_tcp(&a.to_string())).await {
             Ok(Ok(s)) => {
                 s.set_nodelay(true).ok();
                 return Ok(s);
@@ -483,7 +528,7 @@ async fn connect_socks(
     auth: &Option<(String, String)>,
     dest: &Dest,
 ) -> Result<TcpStream> {
-    let mut s = timeout(Duration::from_secs(10), TcpStream::connect(server))
+    let mut s = timeout(Duration::from_secs(10), connect_engine_tcp(server))
         .await
         .map_err(|_| anyhow!("upstream socks {server}: connect timed out"))??;
     s.set_nodelay(true).ok();
