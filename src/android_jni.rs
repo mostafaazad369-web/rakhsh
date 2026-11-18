@@ -18,7 +18,6 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
 static VPN_SERVICE: OnceLock<Mutex<Option<GlobalRef>>> = OnceLock::new();
 
-
 fn runtime() -> Result<&'static Runtime, String> {
     RUNTIME
         .get_or_init(|| {
