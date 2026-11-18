@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 use std::sync::Arc;
 use std::task::{Context as TaskCtx, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tokio_tungstenite::tungstenite::Message;
@@ -205,6 +205,7 @@ async fn connect_tcp(addr: &str) -> io::Result<TcpStream> {
     #[cfg(target_os = "android")]
     {
         use std::os::fd::AsRawFd;
+        use tokio::net::TcpSocket;
         let mut last_error = None;
         for address in tokio::net::lookup_host(addr).await? {
             let socket = match address {
