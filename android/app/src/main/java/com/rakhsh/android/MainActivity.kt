@@ -2,6 +2,8 @@ package com.rakhsh.android
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Build
+import android.net.VpnService
 import android.text.InputType
 import android.view.ViewGroup
 import android.widget.Button
@@ -37,6 +39,11 @@ class MainActivity : Activity() {
     @Deprecated("Handled for Android document picker compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_VPN_PERMISSION) {
+            if (resultCode == RESULT_OK) startVpnService()
+            else status.text = "مجوز VPN داده نشد؛ اتصال شروع نشد."
+            return
+        }
         if (requestCode != REQUEST_CONFIG || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         try {
@@ -108,6 +115,16 @@ class MainActivity : Activity() {
         }
         root.addView(saveButton, matchWidth())
 
+        root.addView(Button(this).apply {
+            text = "اتصال VPN"
+            setOnClickListener { requestVpnConnection() }
+        }, matchWidth())
+
+        root.addView(Button(this).apply {
+            text = "قطع اتصال"
+            setOnClickListener { stopVpnService() }
+        }, matchWidth())
+
         status = TextView(this).apply {
             text = "هنوز تنظیماتی ذخیره نشده است. سرویس VPN در این نسخه فعال نمی‌شود."
             textSize = 14f
@@ -145,7 +162,7 @@ class MainActivity : Activity() {
             ))
             tokenInput.text.clear()
             secretInput.text.clear()
-            status.text = "تنظیمات معتبر است و پروفایل به‌صورت رمزگذاری‌شده ذخیره شد. اتصال VPN هنوز غیرفعال است."
+            status.text = "پروفایل معتبر و به‌صورت رمزگذاری‌شده ذخیره شد. اکنون می‌توانید اتصال را درخواست کنید."
         } catch (error: Exception) {
             status.text = "ذخیره امن ناموفق بود: ${error.message ?: "خطای نامشخص"}"
         }
@@ -165,6 +182,50 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun requestVpnConnection() {
+        try {
+            // Verify the encrypted values exist before showing Android's consent prompt.
+            store.read("config") ?: error("ابتدا پروفایل را ذخیره کنید")
+            store.read("token") ?: error("Token ذخیره نشده است")
+            store.read("static_secret") ?: error("Static secret ذخیره نشده است")
+            val permissionIntent = VpnService.prepare(this)
+            if (permissionIntent != null) {
+                startActivityForResult(permissionIntent, REQUEST_VPN_PERMISSION)
+            } else {
+                startVpnService()
+            }
+        } catch (error: Exception) {
+            status.text = "آماده‌سازی اتصال ناموفق بود: " + (error.message ?: "خطای نامشخص")
+        }
+    }
+
+    private fun startVpnService() {
+        try {
+            val profile = store.read("config") ?: error("پروفایل موجود نیست")
+            val authToken = store.read("token") ?: error("Token ذخیره نشده است")
+            val authSecret = store.read("static_secret") ?: error("Static secret ذخیره نشده است")
+            val intent = android.content.Intent(this, RakhshVpnService::class.java).apply {
+                action = RakhshVpnService.ACTION_START
+                putExtra(RakhshVpnService.EXTRA_CONFIG, profile)
+                putExtra(RakhshVpnService.EXTRA_TOKEN, authToken)
+                putExtra(RakhshVpnService.EXTRA_SECRET, authSecret)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
+            status.text = "درخواست اتصال ارسال شد؛ وضعیت سرویس در اعلان Android نمایش داده می‌شود."
+        } catch (error: Exception) {
+            status.text = "شروع سرویس ناموفق بود: " + (error.message ?: "خطای نامشخص")
+        }
+    }
+
+    private fun stopVpnService() {
+        val intent = android.content.Intent(this, RakhshVpnService::class.java).apply {
+            action = RakhshVpnService.ACTION_STOP
+        }
+        startService(intent)
+        status.text = "درخواست قطع اتصال ارسال شد."
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun matchWidth() = LinearLayout.LayoutParams(
@@ -175,5 +236,6 @@ class MainActivity : Activity() {
     private companion object {
         const val MAX_CONFIG_CHARS = 1_000_000
         const val REQUEST_CONFIG = 4107
+        const val REQUEST_VPN_PERMISSION = 4108
     }
 }
