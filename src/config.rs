@@ -268,12 +268,13 @@ pub struct Link {
 }
 
 impl Config {
-    pub fn load(path: &Path) -> Result<Config> {
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("reading config {}", path.display()))?;
-        let mut cfg: Config = toml::from_str(&text).context("parsing config TOML")?;
-        strict_tables(&text)?;
-        cfg.source = Some(path.to_path_buf());
+    /// Parse configuration text supplied by a native host. The caller may
+    /// inject credentials from Android Keystore after parsing, avoiding
+    /// plaintext credential files on Android.
+    pub fn from_toml_str(text: &str) -> Result<Config> {
+        let mut cfg: Config = toml::from_str(text).context("parsing config TOML")?;
+        strict_tables(text)?;
+        cfg.source = None;
         match cfg.role.as_str() {
             "entry" | "exit" => {
                 if cfg.token.is_empty()
@@ -290,6 +291,14 @@ impl Config {
             "node" => {}
             other => bail!("role must be \"entry\", \"exit\" or \"node\", got {other:?}"),
         }
+        Ok(cfg)
+    }
+
+    pub fn load(path: &Path) -> Result<Config> {
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("reading config {}", path.display()))?;
+        let mut cfg = Config::from_toml_str(&text)?;
+        cfg.source = Some(path.to_path_buf());
         Ok(cfg)
     }
 
