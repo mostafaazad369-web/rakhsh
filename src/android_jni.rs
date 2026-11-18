@@ -87,6 +87,41 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeClearProtector
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeValidateConfig(
+    mut env: JNIEnv,
+    _class: JClass,
+    config: JString,
+    token: JString,
+    static_secret: JString,
+) -> jni::sys::jstring {
+    let result = (|| -> Result<(), String> {
+        let config: String = env
+            .get_string(&config)
+            .map_err(|e| format!("read config string: {e}"))?
+            .into();
+        let token: String = env
+            .get_string(&token)
+            .map_err(|e| format!("read token string: {e}"))?
+            .into();
+        let static_secret: String = env
+            .get_string(&static_secret)
+            .map_err(|e| format!("read static secret string: {e}"))?
+            .into();
+        crate::prepare_android_config(&config, &token, &static_secret)
+            .map_err(|e| format!("{e:#}"))?;
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => std::ptr::null_mut(),
+        Err(message) => env
+            .new_string(message)
+            .map(|value| value.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
     mut env: JNIEnv,
     _class: JClass,
