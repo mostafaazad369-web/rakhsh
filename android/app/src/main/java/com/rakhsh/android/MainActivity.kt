@@ -16,9 +16,8 @@ import com.rakhsh.android.security.SecretStore
 /**
  * Secure config-import screen.
  *
- * This screen only imports and encrypts the profile and credentials. It does
- * not start the VPN service: TUN establishment and routing remain disabled
- * until the native/service lifecycle is validated end to end.
+ * Imports and encrypts the profile, requests Android VPN consent, and controls
+ * the foreground VpnService. Runtime traffic still requires device validation.
  */
 class MainActivity : Activity() {
     private lateinit var store: SecretStore
@@ -126,7 +125,7 @@ class MainActivity : Activity() {
         }, matchWidth())
 
         status = TextView(this).apply {
-            text = "هنوز تنظیماتی ذخیره نشده است. سرویس VPN در این نسخه فعال نمی‌شود."
+            text = "هنوز تنظیماتی ذخیره نشده است."
             textSize = 14f
             setPadding(0, dp(16), 0, 0)
         }
