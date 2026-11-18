@@ -112,7 +112,7 @@ class RakhshVpnService : VpnService() {
         } catch (error: Exception) {
             // nativeStart owns the detached fd only after accepting the call.
             // If JNI throws before ownership transfer, close the raw descriptor.
-            runCatching { android.system.Os.close(fd) }
+            runCatching { ParcelFileDescriptor.adoptFd(fd).close() }
             throw error
         }
         val manager = getSystemService(NotificationManager::class.java)
