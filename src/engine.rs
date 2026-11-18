@@ -469,7 +469,10 @@ async fn connect_engine_tcp(addr: &str) -> std::io::Result<TcpStream> {
             }
         }
         Err(last_error.unwrap_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no TCP addresses resolved")
+            std::io::Error::new(
+                std::io::ErrorKind::AddrNotAvailable,
+                "no TCP addresses resolved",
+            )
         }))
     }
     #[cfg(not(target_os = "android"))]
