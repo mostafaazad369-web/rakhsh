@@ -66,11 +66,13 @@ pub async fn run(cfg: Config) -> Result<()> {
 /// ownership is transferred to tun-rs.
 #[cfg(target_os = "android")]
 pub async fn run_android(cfg: Config, fd: std::os::fd::OwnedFd) -> Result<()> {
-    use std::os::fd::IntoRawFd;
-    run_inner(cfg, Some(fd.into_raw_fd())).await
+    run_inner(cfg, Some(fd)).await
 }
 
-async fn run_inner(cfg: Config, tun_fd: Option<i32>) -> Result<()> {
+async fn run_inner(
+    cfg: Config,
+    tun_fd: Option<std::os::fd::OwnedFd>,
+) -> Result<()> {
     validate(&cfg)?;
     let keys = Keys::from_cfg(&cfg)?;
     keys.mode.announce();
@@ -78,7 +80,10 @@ async fn run_inner(cfg: Config, tun_fd: Option<i32>) -> Result<()> {
     tokio::spawn(crate::status::serve(crate::status::socket_path(&cfg)));
     #[cfg(target_os = "android")]
     let l3 = match tun_fd {
-        Some(fd) => crate::l3::setup_android(&cfg, fd)?,
+        Some(fd) => {
+            use std::os::fd::IntoRawFd;
+            crate::l3::setup_android(&cfg, fd.into_raw_fd())?
+        }
         None => crate::l3::setup(&cfg)?,
     };
     #[cfg(not(target_os = "android"))]
