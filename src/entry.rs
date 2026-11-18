@@ -59,12 +59,32 @@ pub fn validate(cfg: &Config) -> Result<()> {
 }
 
 pub async fn run(cfg: Config) -> Result<()> {
+    run_inner(cfg, None).await
+}
+
+/// Android entry point. The fd must be a detached VpnService TUN descriptor;
+/// ownership is transferred to tun-rs.
+#[cfg(target_os = "android")]
+pub async fn run_android(cfg: Config, fd: i32) -> Result<()> {
+    run_inner(cfg, Some(fd)).await
+}
+
+async fn run_inner(cfg: Config, tun_fd: Option<i32>) -> Result<()> {
     validate(&cfg)?;
     let keys = Keys::from_cfg(&cfg)?;
     keys.mode.announce();
     let metrics = crate::status::init(&cfg, "entry");
     tokio::spawn(crate::status::serve(crate::status::socket_path(&cfg)));
-    let l3 = crate::l3::setup(&cfg)?;
+    #[cfg(target_os = "android")]
+    let l3 = match tun_fd {
+        Some(fd) => crate::l3::setup_android(&cfg, fd)?,
+        None => crate::l3::setup(&cfg)?,
+    };
+    #[cfg(not(target_os = "android"))]
+    let l3 = {
+        let _ = tun_fd;
+        crate::l3::setup(&cfg)?
+    };
 
     let pool = Pool {
         lanes: Arc::new(Mutex::new(Vec::new())),
