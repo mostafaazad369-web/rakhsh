@@ -25,7 +25,9 @@ fn vpn_service() -> &'static Mutex<Option<GlobalRef>> {
 /// Ask Android VpnService to exempt an already-created socket from the VPN.
 /// The caller MUST invoke this before connect(), bind(), or the first send.
 pub(crate) fn protect_socket(fd: std::os::fd::RawFd) -> anyhow::Result<()> {
-    let vm = JAVA_VM.get().ok_or_else(|| anyhow::anyhow!("Android VPN protector is not registered"))?;
+    let vm = JAVA_VM
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("Android VPN protector is not registered"))?;
     let service = vpn_service()
         .lock()
         .map_err(|_| anyhow::anyhow!("Android VPN protector lock poisoned"))?;
