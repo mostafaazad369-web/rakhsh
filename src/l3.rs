@@ -67,8 +67,38 @@ pub fn setup(cfg: &Config) -> Result<Option<Arc<L3>>> {
             "creating TUN device"
         }
     })?;
-    let dev = Arc::new(dev);
+    setup_device(cfg, addrs, Arc::new(dev), gre, mtu)
+}
 
+/// Attach the Android VpnService TUN descriptor.
+///
+/// The descriptor must be detached from ParcelFileDescriptor and ownership
+/// transferred to Rust. AsyncDevice::from_fd takes ownership and closes it
+/// when the device is dropped. Android's Builder must configure addresses,
+/// routes and MTU before this function is called.
+#[cfg(target_os = "android")]
+pub fn setup_android(cfg: &Config, fd: i32) -> Result<Option<Arc<L3>>> {
+    let Some(addr_cidr) = cfg.l3_addr.as_deref() else {
+        anyhow::bail!("Android VPN requires l3_addr in the Rakhsh configuration");
+    };
+    let addrs = parse_addrs(addr_cidr)?;
+    let gre = cfg.l3_gre.unwrap_or(false);
+    let mtu = planned_mtu(cfg);
+    // SAFETY: caller transfers a live ParcelFileDescriptor.detachFd() descriptor.
+    // tun-rs owns and closes this descriptor when AsyncDevice is dropped.
+    let dev = unsafe { tun_rs::AsyncDevice::from_fd(fd) }
+        .context("wrapping Android VpnService TUN descriptor")?;
+    setup_device(cfg, addrs, Arc::new(dev), gre, mtu)
+}
+
+fn setup_device(
+    cfg: &Config,
+    addrs: Vec<(IpAddr, u8)>,
+    dev: Arc<tun_rs::AsyncDevice>,
+    gre: bool,
+    mtu: u16,
+) -> Result<Option<Arc<L3>>> {
+    #[cfg(not(target_os = "android"))]
     if let Ok(name) = dev.name() {
         if let Some(q) = cfg.l3_txqueuelen {
             run(&["ip", "link", "set", &name, "txqueuelen", &q.to_string()]);
