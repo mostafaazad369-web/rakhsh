@@ -26,6 +26,13 @@ internal object NativeBridge {
     ): String?
 
     @JvmStatic
+    external fun nativeVpnParameters(
+        configToml: String,
+        token: String,
+        staticSecret: String
+    ): String
+
+    @JvmStatic
     external fun nativeStart(
         configToml: String,
         token: String,
