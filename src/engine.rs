@@ -492,7 +492,9 @@ fn bind_engine_udp(addr: &str) -> std::io::Result<UdpSocket> {
 
 #[cfg(not(target_os = "android"))]
 fn bind_engine_udp(addr: &str) -> std::io::Result<UdpSocket> {
-    UdpSocket::bind(addr)
+    let socket = std::net::UdpSocket::bind(addr)?;
+    socket.set_nonblocking(true)?;
+    UdpSocket::from_std(socket)
 }
 
 async fn connect_direct(dest: &Dest, resolved: &[IpAddr]) -> std::io::Result<TcpStream> {
