@@ -77,6 +77,16 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeSetProtector(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeClearProtector(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    if let Ok(mut slot) = vpn_service().lock() {
+        *slot = None;
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
     mut env: JNIEnv,
     _class: JClass,
