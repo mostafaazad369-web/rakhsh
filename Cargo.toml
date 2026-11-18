@@ -12,6 +12,9 @@ default = ["mimalloc", "acme"]
 mimalloc = ["dep:mimalloc"]
 acme = ["dep:instant-acme", "dep:x509-parser"]
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [[bin]]
 name = "rakhsh"
 path = "src/main.rs"
