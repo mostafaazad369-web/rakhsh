@@ -52,6 +52,17 @@ pub(crate) fn prepare_android_config(
     let mut cfg = config::Config::from_toml_str(config_toml)?;
     cfg.token = token.to_owned();
     cfg.static_secret = static_secret.to_owned();
+
+    // The Android host is a VPN client: it owns a local TUN and dials an
+    // entry server. Running an exit-role config here would start the wrong
+    // service topology and must be rejected before the profile is persisted.
+    if cfg.role != "entry" {
+        anyhow::bail!("Android VPN client requires role = \"entry\"");
+    }
+    if cfg.l3_addr.as_deref().is_none_or(str::is_empty) {
+        anyhow::bail!("Android VPN requires l3_addr in the Rakhsh configuration");
+    }
+    entry::validate(&cfg)?;
     Ok(cfg)
 }
 
