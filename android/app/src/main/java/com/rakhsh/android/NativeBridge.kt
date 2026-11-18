@@ -13,6 +13,12 @@ internal object NativeBridge {
     }
 
     @JvmStatic
+    external fun nativeSetProtector(service: android.net.VpnService)
+
+    @JvmStatic
+    external fun nativeClearProtector()
+
+    @JvmStatic
     external fun nativeStart(
         configToml: String,
         token: String,
