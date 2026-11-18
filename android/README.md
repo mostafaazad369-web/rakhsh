@@ -61,3 +61,16 @@ This is a partial integration milestone. `RakhshVpnService` registers its live s
 
 - `NativeBridge.nativeClearProtector()` now has a matching Rust JNI export, so the Kotlin service teardown does not call a missing native symbol.
 - The VPN service remains intentionally guarded and immediately stops on start; no TUN is established and no traffic is routed until the Android Builder, foreground notification, configuration screen, permission flow, and stop/error lifecycle are implemented and device-tested.
+
+
+## Initial Android VPN service implementation
+
+The Android branch now includes an initial end-to-end service path:
+
+- MainActivity requests Android VPN consent and provides connect/disconnect controls.
+- RakhshVpnService enters foreground mode, obtains L3 addresses/MTU/DNS from a JNI validation call, establishes the Android TUN with default IPv4 and IPv6 routes, detaches the TUN fd, and starts the Rust entry engine.
+- The service stops the native Tokio task on explicit disconnect or Android VPN revocation.
+- The JNI parameter export validates the same in-memory TOML and credentials before Android creates the TUN.
+- The service passes encrypted profile values to JNI in memory; no plaintext profile file is written.
+
+This is an implementation milestone, not yet a device-verified VPN release. Android build and CI must pass, then a physical-device test must verify consent, foreground-service eligibility on supported Android versions, DNS behavior, IPv4/IPv6 routing, carrier protection, traffic flow, revoke, stop and reconnect. Default routes are installed for both IP families; successful packet forwarding depends on the configured peer and remote Rakhsh entry endpoint supporting the corresponding traffic.
