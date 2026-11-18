@@ -9,7 +9,6 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import com.rakhsh.android.security.SecretStore
 
 /**
@@ -26,10 +25,20 @@ class MainActivity : Activity() {
     private lateinit var secretInput: EditText
     private lateinit var status: TextView
 
-    private val openConfig = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri == null) return@registerForActivityResult
+    @Suppress("DEPRECATION")
+    private fun chooseConfigFile() {
+        val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQUEST_CONFIG)
+    }
+
+    @Deprecated("Handled for Android document picker compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_CONFIG || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
         try {
             val text = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
                 val value = it.readText()
@@ -66,7 +75,7 @@ class MainActivity : Activity() {
 
         val importButton = Button(this).apply {
             text = "انتخاب فایل تنظیمات TOML"
-            setOnClickListener { openConfig.launch(arrayOf("text/*", "application/octet-stream")) }
+            setOnClickListener { chooseConfigFile() }
         }
         root.addView(importButton, matchWidth())
 
@@ -158,5 +167,6 @@ class MainActivity : Activity() {
 
     private companion object {
         const val MAX_CONFIG_CHARS = 1_000_000
+        const val REQUEST_CONFIG = 4107
     }
 }
