@@ -44,6 +44,7 @@ impl L3 {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 pub fn setup(cfg: &Config) -> Result<Option<Arc<L3>>> {
     let Some(addr_cidr) = cfg.l3_addr.as_deref() else {
         return Ok(None);
