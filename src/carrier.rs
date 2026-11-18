@@ -211,8 +211,7 @@ async fn connect_tcp(addr: &str) -> io::Result<TcpStream> {
                 SocketAddr::V4(_) => TcpSocket::new_v4()?,
                 SocketAddr::V6(_) => TcpSocket::new_v6()?,
             };
-            crate::android_jni::protect_socket(socket.as_raw_fd())
-                .map_err(io::Error::other)?;
+            crate::android_jni::protect_socket(socket.as_raw_fd()).map_err(io::Error::other)?;
             match socket.connect(address).await {
                 Ok(stream) => return Ok(stream),
                 Err(error) => last_error = Some(error),

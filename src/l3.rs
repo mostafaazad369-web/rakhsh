@@ -77,10 +77,7 @@ pub fn setup(cfg: &Config) -> Result<Option<Arc<L3>>> {
 /// when the device is dropped. Android's Builder must configure addresses,
 /// routes and MTU before this function is called.
 #[cfg(target_os = "android")]
-pub fn setup_android(
-    cfg: &Config,
-    fd: std::os::fd::OwnedFd,
-) -> Result<Option<Arc<L3>>> {
+pub fn setup_android(cfg: &Config, fd: std::os::fd::OwnedFd) -> Result<Option<Arc<L3>>> {
     let Some(addr_cidr) = cfg.l3_addr.as_deref() else {
         anyhow::bail!("Android VPN requires l3_addr in the Rakhsh configuration");
     };

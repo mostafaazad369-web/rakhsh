@@ -26,18 +26,18 @@ fn vpn_service() -> &'static Mutex<Option<GlobalRef>> {
 /// The caller MUST invoke this before connect(), bind(), or the first send.
 pub(crate) fn protect_socket(fd: std::os::fd::RawFd) -> anyhow::Result<()> {
     let vm = JAVA_VM.get().ok_or_else(|| anyhow::anyhow!("Android VPN protector is not registered"))?;
-    let service = vpn_service().lock()
+    let service = vpn_service()
+        .lock()
         .map_err(|_| anyhow::anyhow!("Android VPN protector lock poisoned"))?;
-    let service = service.as_ref()
+    let service = service
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Android VPN service is not registered"))?;
-    let mut env = vm.attach_current_thread()
+    let mut env = vm
+        .attach_current_thread()
         .map_err(|e| anyhow::anyhow!("attach JNI thread: {e}"))?;
-    let allowed = env.call_method(
-        service.as_obj(),
-        "protect",
-        "(I)Z",
-        &[JValue::Int(fd)],
-    )?.z()?;
+    let allowed = env
+        .call_method(service.as_obj(), "protect", "(I)Z", &[JValue::Int(fd)])?
+        .z()?;
     if !allowed {
         anyhow::bail!("Android VpnService.protect({fd}) returned false");
     }
@@ -87,13 +87,16 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
         if tun_fd < 0 {
             return Err("invalid Android TUN file descriptor".into());
         }
-        let config: String = env.get_string(&config)
+        let config: String = env
+            .get_string(&config)
             .map_err(|e| format!("read config string: {e}"))?
             .into();
-        let token: String = env.get_string(&token)
+        let token: String = env
+            .get_string(&token)
             .map_err(|e| format!("read token string: {e}"))?
             .into();
-        let static_secret: String = env.get_string(&static_secret)
+        let static_secret: String = env
+            .get_string(&static_secret)
             .map_err(|e| format!("read static secret string: {e}"))?
             .into();
 
@@ -102,7 +105,8 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
         let cfg = crate::prepare_android_config(&config, &token, &static_secret)
             .map_err(|e| format!("invalid Android Rakhsh config: {e:#}"))?;
         let rt = runtime()?;
-        let mut registry = tasks().lock()
+        let mut registry = tasks()
+            .lock()
             .map_err(|_| "native task registry poisoned".to_string())?;
 
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);

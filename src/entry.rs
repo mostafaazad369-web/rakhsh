@@ -69,10 +69,7 @@ pub async fn run_android(cfg: Config, fd: std::os::fd::OwnedFd) -> Result<()> {
     run_inner(cfg, Some(fd)).await
 }
 
-async fn run_inner(
-    cfg: Config,
-    tun_fd: Option<std::os::fd::OwnedFd>,
-) -> Result<()> {
+async fn run_inner(cfg: Config, tun_fd: Option<std::os::fd::OwnedFd>) -> Result<()> {
     validate(&cfg)?;
     let keys = Keys::from_cfg(&cfg)?;
     keys.mode.announce();
