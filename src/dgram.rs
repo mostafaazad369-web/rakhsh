@@ -815,6 +815,22 @@ async fn entry_bridge(h: Arc<Handle>, listen: SocketAddr) -> Result<()> {
     bail!("the session ended")
 }
 
+/// Bind an outbound UDP flow socket and exempt it from the Android VPN TUN.
+async fn bind_exit_udp(local: SocketAddr) -> std::io::Result<UdpSocket> {
+    #[cfg(target_os = "android")]
+    {
+        use std::os::fd::AsRawFd;
+        let socket = std::net::UdpSocket::bind(local)?;
+        crate::android_jni::protect_socket(socket.as_raw_fd()).map_err(std::io::Error::other)?;
+        socket.set_nonblocking(true)?;
+        UdpSocket::from_std(socket)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        UdpSocket::bind(local).await
+    }
+}
+
 async fn exit_bridge(h: Arc<Handle>, target: SocketAddr) -> Result<()> {
     let socks: Arc<Mutex<HashMap<u16, Arc<UdpSocket>>>> = Arc::new(Mutex::new(HashMap::new()));
     info!("shabdiz exit: delivering to udp {target}");
@@ -830,7 +846,7 @@ async fn exit_bridge(h: Arc<Handle>, target: SocketAddr) -> Result<()> {
                 Some(s) => s,
                 None => {
                     let local = shabdiz::carrier::udp::wildcard_for(target);
-                    let Ok(s) = UdpSocket::bind(local).await else {
+                    let Ok(s) = bind_exit_udp(local).await else {
                         continue;
                     };
                     if s.connect(target).await.is_err() {
