@@ -19,6 +19,13 @@ internal object NativeBridge {
     external fun nativeClearProtector()
 
     @JvmStatic
+    external fun nativeValidateConfig(
+        configToml: String,
+        token: String,
+        staticSecret: String
+    ): String?
+
+    @JvmStatic
     external fun nativeStart(
         configToml: String,
         token: String,
