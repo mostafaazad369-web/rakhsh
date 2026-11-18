@@ -12,26 +12,19 @@ use std::sync::{Mutex, OnceLock};
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
 
-static RUNTIME: OnceLock<Result<Runtime, String>> = OnceLock::new();
-static TASKS: OnceLock<Mutex<HashMap<i64, JoinHandle<()>>>> = OnceLock::new();
+static TASKS: OnceLock<Mutex<HashMap<i64, AndroidTask>>> = OnceLock::new();
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
 static VPN_SERVICE: OnceLock<Mutex<Option<GlobalRef>>> = OnceLock::new();
 
-fn runtime() -> Result<&'static Runtime, String> {
-    RUNTIME
-        .get_or_init(|| {
-            Builder::new_multi_thread()
-                .enable_all()
-                .thread_name("rakhsh-android")
-                .build()
-                .map_err(|e| format!("create Android Tokio runtime: {e}"))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
+struct AndroidTask {
+    // Keep a dedicated runtime per VPN session so nativeStop shuts down every
+    // child task spawned by the engine, not only the top-level future.
+    runtime: Runtime,
+    handle: JoinHandle<()>,
 }
 
-fn tasks() -> &'static Mutex<HashMap<i64, JoinHandle<()>>> {
+fn tasks() -> &'static Mutex<HashMap<i64, AndroidTask>> {
     TASKS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -215,7 +208,11 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
         // descriptor. On any error above, Kotlin still owns the PFD.
         let cfg = crate::prepare_android_config(&config, &token, &static_secret)
             .map_err(|e| format!("invalid Android Rakhsh config: {e:#}"))?;
-        let rt = runtime()?;
+        let rt = Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("rakhsh-android")
+            .build()
+            .map_err(|e| format!("create Android Tokio runtime: {e}"))?;
         let mut registry = tasks()
             .lock()
             .map_err(|_| "native task registry poisoned".to_string())?;
@@ -234,7 +231,7 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
                 tracing::error!("Android Rakhsh engine stopped: {error:#}");
             }
         });
-        registry.insert(id, handle);
+        registry.insert(id, AndroidTask { runtime: rt, handle });
         Ok(id)
     })();
 
@@ -257,8 +254,10 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStop(
         return;
     }
     if let Ok(mut tasks) = tasks().lock() {
-        if let Some(handle) = tasks.remove(&(task_id as i64)) {
-            handle.abort();
+        if let Some(task) = tasks.remove(&(task_id as i64)) {
+            task.handle.abort();
+            // This also cancels detached child tasks spawned by entry::run_inner.
+            task.runtime.shutdown_background();
         }
     }
 }
