@@ -36,3 +36,41 @@ mod win_raw;
 mod wire;
 mod xui;
 pub use shabdiz;
+
+#[cfg(target_os = "android")]
+pub(crate) mod android_jni;
+
+/// Run the tunnel from an Android host without writing credentials to disk.
+/// The VPN descriptor is transferred to the native engine and closed by
+/// tun-rs when the engine releases it.
+#[cfg(target_os = "android")]
+pub(crate) fn prepare_android_config(
+    config_toml: &str,
+    token: &str,
+    static_secret: &str,
+) -> anyhow::Result<config::Config> {
+    let mut cfg = config::Config::from_toml_str(config_toml)?;
+    cfg.token = token.to_owned();
+    cfg.static_secret = static_secret.to_owned();
+
+    // The Android host is a VPN client: it owns a local TUN and dials an
+    // entry server. Running an exit-role config here would start the wrong
+    // service topology and must be rejected before the profile is persisted.
+    if cfg.role != "entry" {
+        anyhow::bail!("Android VPN client requires role = \"entry\"");
+    }
+    if cfg.l3_addr.as_deref().is_none_or(str::is_empty) {
+        anyhow::bail!("Android VPN requires l3_addr in the Rakhsh configuration");
+    }
+    entry::validate(&cfg)?;
+    Ok(cfg)
+}
+
+/// Run a validated Android configuration with ownership of the detached TUN fd.
+#[cfg(target_os = "android")]
+pub(crate) async fn run_android_config(
+    cfg: config::Config,
+    tun_fd: std::os::fd::OwnedFd,
+) -> anyhow::Result<()> {
+    entry::run_android(cfg, tun_fd).await
+}

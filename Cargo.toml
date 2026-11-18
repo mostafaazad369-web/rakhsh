@@ -12,6 +12,9 @@ default = ["mimalloc", "acme"]
 mimalloc = ["dep:mimalloc"]
 acme = ["dep:instant-acme", "dep:x509-parser"]
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [[bin]]
 name = "rakhsh"
 path = "src/main.rs"
@@ -58,6 +61,9 @@ rama = { git = "https://github.com/plabayo/rama", rev = "ec92b76", default-featu
 # Host metrics come from /proc on Linux; everywhere else they come from here.
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 sysinfo = { version = "=0.40.1", default-features = false, features = ["system"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "=0.21.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # faketcp on Windows loads a packet driver at run time: WinDivert.dll next to
