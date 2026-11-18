@@ -38,7 +38,7 @@ mod xui;
 pub use shabdiz;
 
 #[cfg(target_os = "android")]
-mod android_jni;
+pub(crate) mod android_jni;
 
 /// Run the tunnel from an Android host without writing credentials to disk.
 /// The VPN descriptor is transferred to the native engine and closed by
