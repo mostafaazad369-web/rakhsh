@@ -141,6 +141,6 @@ class SecretStore(context: Context) {
         const val MIN_IV_SIZE = 12
         const val MAX_IV_SIZE = 16
 
-        val ALLOWED_NAMES = setOf("token", "static_secret")
+        val ALLOWED_NAMES = setOf("config", "token", "static_secret")
     }
 }
