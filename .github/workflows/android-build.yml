@@ -7,6 +7,7 @@ on:
       - android/secure-credential-store
     paths:
       - "android/**"
+      - "android/README.md"
       - "src/**"
       - "Cargo.toml"
       - "Cargo.lock"
