@@ -167,7 +167,10 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeVpnParameters(
             .map_err(|e| format!("invalid Android Rakhsh config: {e:#}"))?;
         let addresses = cfg.l3_addr.as_deref()
             .ok_or_else(|| "Android VPN requires l3_addr".to_string())?;
-        Ok(format!("{}\\n{}", addresses, crate::l3::planned_mtu(&cfg)))
+        let dns = cfg.dns.as_ref()
+            .map(|dns| dns.remote.join(","))
+            .unwrap_or_default();
+        Ok(format!("{}\\n{}\\n{}", addresses, crate::l3::planned_mtu(&cfg), dns))
     })();
 
     match result {
