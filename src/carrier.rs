@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 use std::sync::Arc;
 use std::task::{Context as TaskCtx, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio::sync::Mutex;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tokio_tungstenite::tungstenite::Message;
@@ -196,6 +196,35 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> FrameRx for WsRx<S> {
                 None => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "ws closed")),
             }
         }
+    }
+}
+
+/// Connect a TCP carrier socket. Android sockets are exempted from the
+/// VpnService TUN before connect(), preventing the tunnel from capturing itself.
+async fn connect_tcp(addr: &str) -> io::Result<TcpStream> {
+    #[cfg(target_os = "android")]
+    {
+        use std::os::fd::AsRawFd;
+        let mut last_error = None;
+        for address in tokio::net::lookup_host(addr).await? {
+            let socket = match address {
+                SocketAddr::V4(_) => TcpSocket::new_v4()?,
+                SocketAddr::V6(_) => TcpSocket::new_v6()?,
+            };
+            crate::android_jni::protect_socket(socket.as_raw_fd())
+                .map_err(io::Error::other)?;
+            match socket.connect(address).await {
+                Ok(stream) => return Ok(stream),
+                Err(error) => last_error = Some(error),
+            }
+        }
+        return Err(last_error.unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::AddrNotAvailable, "no TCP addresses resolved")
+        }));
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        TcpStream::connect(addr).await
     }
 }
 
@@ -505,6 +534,10 @@ impl Carrier {
         }
 
         let kind = cfg.carrier.as_deref().unwrap_or("tcp");
+        #[cfg(target_os = "android")]
+        if !matches!(kind, "tcp" | "tls" | "ws" | "wss") {
+            bail!("Android currently supports TCP-based carriers only; {kind:?} remains disabled until its UDP/raw sockets are protected");
+        }
         quic::set_congestion(cfg.congestion.as_deref());
         quic::set_bind(cfg.bind.as_deref(), dials_ipv6(cfg));
         let sni = cfg.sni.as_deref().unwrap_or("www.cloudflare.com");
@@ -618,7 +651,7 @@ impl Carrier {
                 ..
             } => {
                 let dial_to = edge_ip.clone().unwrap_or_else(|| addr.to_string());
-                let tcp = TcpStream::connect(&dial_to)
+                let tcp = connect_tcp(&dial_to)
                     .await
                     .with_context(|| format!("connecting to {dial_to}"))?;
                 tcp.set_nodelay(true).ok();
