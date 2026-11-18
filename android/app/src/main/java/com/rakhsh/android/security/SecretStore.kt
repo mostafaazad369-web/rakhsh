@@ -30,26 +30,39 @@ class SecretStore(context: Context) {
 
     @Synchronized
     fun save(name: String, secret: String) {
-        require(name in ALLOWED_NAMES) { "Unsupported secret name" }
-        require(secret.isNotEmpty()) { "Secret must not be empty" }
+        saveAll(mapOf(name to secret))
+    }
 
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        cipher.updateAAD(name.toByteArray(Charsets.UTF_8))
+    /**
+     * Encrypt and persist a complete profile in one SharedPreferences commit.
+     * Either all profile fields are replaced, or none of them are.
+     */
+    @Synchronized
+    fun saveAll(values: Map<String, String>) {
+        require(values.isNotEmpty()) { "No values supplied" }
+        require(values.keys.all { it in ALLOWED_NAMES }) { "Unsupported secret name" }
+        require(values.values.all { it.isNotEmpty() }) { "Secret values must not be empty" }
 
-        val ciphertext = cipher.doFinal(secret.toByteArray(Charsets.UTF_8))
-        val iv = cipher.iv
-        require(iv.size in MIN_IV_SIZE..MAX_IV_SIZE) { "Unexpected GCM IV size" }
+        val encrypted = values.mapValues { (name, value) ->
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+            cipher.updateAAD(name.toByteArray(Charsets.UTF_8))
 
-        val payload = ByteBuffer.allocate(Int.SIZE_BYTES + iv.size + ciphertext.size)
-            .putInt(iv.size)
-            .put(iv)
-            .put(ciphertext)
-            .array()
+            val ciphertext = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+            val iv = cipher.iv
+            require(iv.size in MIN_IV_SIZE..MAX_IV_SIZE) { "Unexpected GCM IV size" }
 
-        check(prefs.edit()
-            .putString(name, Base64.encodeToString(payload, Base64.NO_WRAP))
-            .commit()) { "Could not persist encrypted secret" }
+            ByteBuffer.allocate(Int.SIZE_BYTES + iv.size + ciphertext.size)
+                .putInt(iv.size)
+                .put(iv)
+                .put(ciphertext)
+                .array()
+                .let { Base64.encodeToString(it, Base64.NO_WRAP) }
+        }
+
+        val editor = prefs.edit()
+        encrypted.forEach { (name, payload) -> editor.putString(name, payload) }
+        check(editor.commit()) { "Could not persist encrypted profile" }
     }
 
     @Synchronized
