@@ -143,6 +143,46 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeValidateConfig
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeVpnParameters(
+    mut env: JNIEnv,
+    _class: JClass,
+    config: JString,
+    token: JString,
+    static_secret: JString,
+) -> jni::sys::jstring {
+    let result = (|| -> Result<String, String> {
+        let config: String = env
+            .get_string(&config)
+            .map_err(|e| format!("read config string: {e}"))?
+            .into();
+        let token: String = env
+            .get_string(&token)
+            .map_err(|e| format!("read token string: {e}"))?
+            .into();
+        let static_secret: String = env
+            .get_string(&static_secret)
+            .map_err(|e| format!("read static secret string: {e}"))?
+            .into();
+        let cfg = crate::prepare_android_config(&config, &token, &static_secret)
+            .map_err(|e| format!("invalid Android Rakhsh config: {e:#}"))?;
+        let addresses = cfg.l3_addr.as_deref()
+            .ok_or_else(|| "Android VPN requires l3_addr".to_string())?;
+        Ok(format!("{}\\n{}", addresses, crate::l3::planned_mtu(&cfg)))
+    })();
+
+    match result {
+        Ok(value) => env
+            .new_string(value)
+            .map(|value| value.into_raw())
+            .unwrap_or(std::ptr::null_mut()),
+        Err(message) => {
+            fail(&mut env, &message);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeStart(
     mut env: JNIEnv,
     _class: JClass,
