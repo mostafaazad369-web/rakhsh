@@ -6,7 +6,7 @@ use jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
 use jni::sys::{jint, jlong};
 use jni::{JNIEnv, JavaVM};
 use std::collections::HashMap;
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::fd::FromRawFd;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tokio::runtime::{Builder, Runtime};
@@ -17,6 +17,28 @@ static TASKS: OnceLock<Mutex<HashMap<i64, JoinHandle<()>>>> = OnceLock::new();
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
 static VPN_SERVICE: OnceLock<Mutex<Option<GlobalRef>>> = OnceLock::new();
+
+
+fn runtime() -> Result<&'static Runtime, String> {
+    RUNTIME
+        .get_or_init(|| {
+            Builder::new_multi_thread()
+                .enable_all()
+                .thread_name("rakhsh-android")
+                .build()
+                .map_err(|e| format!("create Android Tokio runtime: {e}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
+
+fn tasks() -> &'static Mutex<HashMap<i64, JoinHandle<()>>> {
+    TASKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn fail(env: &mut JNIEnv, message: &str) {
+    let _ = env.throw_new("java/lang/IllegalStateException", message);
+}
 
 fn vpn_service() -> &'static Mutex<Option<GlobalRef>> {
     VPN_SERVICE.get_or_init(|| Mutex::new(None))
