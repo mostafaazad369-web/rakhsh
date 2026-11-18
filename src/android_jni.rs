@@ -50,50 +50,28 @@ pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeSetProtector(
     _class: JClass,
     service: JObject,
 ) {
-    let result = (|| -> jni::errors::Result<()> {
-        let vm = env.get_java_vm()?;
-        let _ = JAVA_VM.set(vm);
-        let global = env.new_global_ref(service)?;
-        let mut slot = vpn_service().lock()
-            .map_err(|_| jni::errors::Error::JavaException)?;
-        *slot = Some(global);
-        Ok(())
-    })();
-    if let Err(error) = result {
-        fail(&mut env, &format!("register Android VPN protector: {error}"));
+    let vm = match env.get_java_vm() {
+        Ok(vm) => vm,
+        Err(error) => {
+            fail(&mut env, &format!("get Android JavaVM: {error}"));
+            return;
+        }
+    };
+    let global = match env.new_global_ref(service) {
+        Ok(global) => global,
+        Err(error) => {
+            fail(&mut env, &format!("retain Android VPN service: {error}"));
+            return;
+        }
+    };
+    if JAVA_VM.set(vm).is_err() {
+        // A JavaVM is process-wide. A previous registration is expected when
+        // the VPN service is restarted; the global service reference is replaced.
     }
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeClearProtector(
-    _env: JNIEnv,
-    _class: JClass,
-) {
-    if let Ok(mut slot) = vpn_service().lock() {
-        *slot = None;
+    match vpn_service().lock() {
+        Ok(mut slot) => *slot = Some(global),
+        Err(_) => fail(&mut env, "Android VPN protector lock poisoned"),
     }
-}
-
-fn runtime() -> Result<&'static Runtime, String> {
-    match RUNTIME.get_or_init(|| {
-        Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .thread_name("rakhsh-native")
-            .build()
-            .map_err(|e| format!("create Tokio runtime: {e}"))
-    }) {
-        Ok(runtime) => Ok(runtime),
-        Err(error) => Err(error.clone()),
-    }
-}
-
-fn tasks() -> &'static Mutex<HashMap<i64, JoinHandle<()>>> {
-    TASKS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn fail(env: &mut JNIEnv<'_>, message: &str) {
-    let _ = env.throw_new("java/lang/IllegalStateException", message);
 }
 
 #[no_mangle]
