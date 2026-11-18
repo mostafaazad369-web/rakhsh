@@ -2,11 +2,11 @@
 //!
 //! The VPN service owns the TUN descriptor until nativeStart is called. After
 //! that call, ownership is transferred to tun-rs through run_android().
-use jni::objects::{JClass, JString};
+use jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
 use jni::sys::{jint, jlong};
-use jni::JNIEnv;
+use jni::{JNIEnv, JavaVM};
 use std::collections::HashMap;
-use std::os::fd::FromRawFd;
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::runtime::{Builder, Runtime};
@@ -15,6 +15,64 @@ use tokio::task::JoinHandle;
 static RUNTIME: OnceLock<Result<Runtime, String>> = OnceLock::new();
 static TASKS: OnceLock<Mutex<HashMap<i64, JoinHandle<()>>>> = OnceLock::new();
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
+static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
+static VPN_SERVICE: OnceLock<Mutex<Option<GlobalRef>>> = OnceLock::new();
+
+fn vpn_service() -> &'static Mutex<Option<GlobalRef>> {
+    VPN_SERVICE.get_or_init(|| Mutex::new(None))
+}
+
+/// Ask Android VpnService to exempt an already-created socket from the VPN.
+/// The caller MUST invoke this before connect(), bind(), or the first send.
+pub(crate) fn protect_socket(fd: std::os::fd::RawFd) -> anyhow::Result<()> {
+    let vm = JAVA_VM.get().ok_or_else(|| anyhow::anyhow!("Android VPN protector is not registered"))?;
+    let service = vpn_service().lock()
+        .map_err(|_| anyhow::anyhow!("Android VPN protector lock poisoned"))?;
+    let service = service.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Android VPN service is not registered"))?;
+    let mut env = vm.attach_current_thread()
+        .map_err(|e| anyhow::anyhow!("attach JNI thread: {e}"))?;
+    let allowed = env.call_method(
+        service.as_obj(),
+        "protect",
+        "(I)Z",
+        &[JValue::Int(fd)],
+    )?.z()?;
+    if !allowed {
+        anyhow::bail!("Android VpnService.protect({fd}) returned false");
+    }
+    Ok(())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeSetProtector(
+    mut env: JNIEnv,
+    _class: JClass,
+    service: JObject,
+) {
+    let result = (|| -> jni::errors::Result<()> {
+        let vm = env.get_java_vm()?;
+        let _ = JAVA_VM.set(vm);
+        let global = env.new_global_ref(service)?;
+        let mut slot = vpn_service().lock()
+            .map_err(|_| jni::errors::Error::JavaException)?;
+        *slot = Some(global);
+        Ok(())
+    })();
+    if let Err(error) = result {
+        fail(&mut env, &format!("register Android VPN protector: {error}"));
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_rakhsh_android_NativeBridge_nativeClearProtector(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    if let Ok(mut slot) = vpn_service().lock() {
+        *slot = None;
+    }
+}
 
 fn runtime() -> Result<&'static Runtime, String> {
     match RUNTIME.get_or_init(|| {
