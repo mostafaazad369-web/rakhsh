@@ -80,7 +80,7 @@ async fn run_inner(
     tokio::spawn(crate::status::serve(crate::status::socket_path(&cfg)));
     #[cfg(target_os = "android")]
     let l3 = match tun_fd {
-        Some(fd) => crate::l3::setup_android(&cfg, fd)?
+        Some(fd) => crate::l3::setup_android(&cfg, fd)?,
         None => crate::l3::setup(&cfg)?,
     };
     #[cfg(not(target_os = "android"))]
