@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: rakhsh-android-arm64
+  cancel-in-progress: true
+
 jobs:
   android-arm64:
     runs-on: ubuntu-latest
