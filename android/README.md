@@ -33,3 +33,19 @@ The generated debug APK is expected at:
 `android/app/build/outputs/apk/debug/app-debug.apk`
 
 A successful Gradle build only proves that the Android shell compiles. It does not prove that VPN traffic is tunneled.
+
+
+## JNI milestone
+
+The Android-only Rust library now exports JNI entry points declared by
+`NativeBridge.kt`:
+
+- `nativeStart(configToml, token, staticSecret, tunFd)` creates a shared Tokio
+  runtime and starts the Rust engine task.
+- `nativeStop(taskId)` aborts the corresponding task.
+
+This is only the native bridge layer. The current `RakhshVpnService` remains
+intentionally guarded and does not establish a TUN interface or call JNI yet.
+Do not enable VPN routing until the service lifecycle is wired and every
+outbound carrier socket is protected with `VpnService.protect(fd)` before its
+first connect/send operation.
