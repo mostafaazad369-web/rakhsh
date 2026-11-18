@@ -44,14 +44,22 @@ mod android_jni;
 /// The VPN descriptor is transferred to the native engine and closed by
 /// tun-rs when the engine releases it.
 #[cfg(target_os = "android")]
-pub async fn run_android(
+pub(crate) fn prepare_android_config(
     config_toml: &str,
     token: &str,
     static_secret: &str,
-    tun_fd: i32,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<config::Config> {
     let mut cfg = config::Config::from_toml_str(config_toml)?;
     cfg.token = token.to_owned();
     cfg.static_secret = static_secret.to_owned();
+    Ok(cfg)
+}
+
+/// Run a validated Android configuration with ownership of the detached TUN fd.
+#[cfg(target_os = "android")]
+pub(crate) async fn run_android_config(
+    cfg: config::Config,
+    tun_fd: std::os::fd::OwnedFd,
+) -> anyhow::Result<()> {
     entry::run_android(cfg, tun_fd).await
 }
