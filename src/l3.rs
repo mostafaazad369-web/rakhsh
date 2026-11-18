@@ -77,16 +77,20 @@ pub fn setup(cfg: &Config) -> Result<Option<Arc<L3>>> {
 /// when the device is dropped. Android's Builder must configure addresses,
 /// routes and MTU before this function is called.
 #[cfg(target_os = "android")]
-pub fn setup_android(cfg: &Config, fd: i32) -> Result<Option<Arc<L3>>> {
+pub fn setup_android(
+    cfg: &Config,
+    fd: std::os::fd::OwnedFd,
+) -> Result<Option<Arc<L3>>> {
     let Some(addr_cidr) = cfg.l3_addr.as_deref() else {
         anyhow::bail!("Android VPN requires l3_addr in the Rakhsh configuration");
     };
     let addrs = parse_addrs(addr_cidr)?;
     let gre = cfg.l3_gre.unwrap_or(false);
     let mtu = planned_mtu(cfg);
-    // SAFETY: caller transfers a live ParcelFileDescriptor.detachFd() descriptor.
-    // tun-rs owns and closes this descriptor when AsyncDevice is dropped.
-    let dev = unsafe { tun_rs::AsyncDevice::from_fd(fd) }
+    use std::os::fd::IntoRawFd;
+    // SAFETY: fd originates from ParcelFileDescriptor.detachFd(). Ownership is
+    // transferred to tun-rs only after config/address validation has succeeded.
+    let dev = unsafe { tun_rs::AsyncDevice::from_fd(fd.into_raw_fd()) }
         .context("wrapping Android VpnService TUN descriptor")?;
     setup_device(cfg, addrs, Arc::new(dev), gre, mtu)
 }
