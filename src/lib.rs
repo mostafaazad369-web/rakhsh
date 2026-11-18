@@ -37,7 +37,6 @@ mod wire;
 mod xui;
 pub use shabdiz;
 
-
 /// Run the tunnel from an Android host without writing credentials to disk.
 /// The VPN descriptor is transferred to the native engine and closed by
 /// tun-rs when the engine releases it.
