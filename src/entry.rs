@@ -65,8 +65,9 @@ pub async fn run(cfg: Config) -> Result<()> {
 /// Android entry point. The fd must be a detached VpnService TUN descriptor;
 /// ownership is transferred to tun-rs.
 #[cfg(target_os = "android")]
-pub async fn run_android(cfg: Config, fd: i32) -> Result<()> {
-    run_inner(cfg, Some(fd)).await
+pub async fn run_android(cfg: Config, fd: std::os::fd::OwnedFd) -> Result<()> {
+    use std::os::fd::IntoRawFd;
+    run_inner(cfg, Some(fd.into_raw_fd())).await
 }
 
 async fn run_inner(cfg: Config, tun_fd: Option<i32>) -> Result<()> {
