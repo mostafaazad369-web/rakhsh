@@ -77,6 +77,14 @@ pub fn setup(cfg: &Config) -> Result<Option<Arc<L3>>> {
 /// transferred to Rust. AsyncDevice::from_fd takes ownership and closes it
 /// when the device is dropped. Android's Builder must configure addresses,
 /// routes and MTU before this function is called.
+/// Host-style setup is intentionally unavailable on Android: only VpnService
+/// may create the TUN device. Entry mode must call setup_android with its
+/// detached descriptor; exit mode may omit layer 3 entirely.
+#[cfg(target_os = "android")]
+pub fn setup(_cfg: &Config) -> Result<Option<Arc<L3>>> {
+    anyhow::bail!("Android layer-3 setup requires a TUN descriptor from VpnService")
+}
+
 #[cfg(target_os = "android")]
 pub fn setup_android(cfg: &Config, fd: std::os::fd::OwnedFd) -> Result<Option<Arc<L3>>> {
     let Some(addr_cidr) = cfg.l3_addr.as_deref() else {
