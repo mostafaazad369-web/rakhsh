@@ -47,3 +47,11 @@ The Android-only Rust library now exports JNI entry points declared by
 - `nativeStop(taskId)` aborts the corresponding task.
 
 This is a partial integration milestone. `RakhshVpnService` registers its live service instance with JNI, and Rust TCP carrier sockets call `VpnService.protect(fd)` before connecting. The service still intentionally does not establish a TUN or call `nativeStart`: Android VPN permission flow, config import, foreground notification, Builder address/routes/MTU, full service lifecycle, and device testing remain incomplete. UDP/QUIC/KCP/Rama/raw carriers are rejected on Android until their socket paths are protected.
+
+
+## Android socket protection milestone
+
+- Rust registers the live `VpnService` instance through JNI.
+- Android TCP/TLS/WS/WSS outbound sockets are created with `TcpSocket`, passed to `VpnService.protect(fd)`, and only then connected.
+- Android builds reject QUIC, KCP, Rama QUIC and raw carriers until their UDP/raw sockets receive equivalent protection.
+- The service remains guarded: it does not establish the TUN or start the engine until VPN permission, config import, foreground notification, routes/MTU and device lifecycle tests are complete.
