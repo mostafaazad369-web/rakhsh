@@ -11,19 +11,22 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
 
-static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+static RUNTIME: OnceLock<Result<Runtime, String>> = OnceLock::new();
 static TASKS: OnceLock<Mutex<HashMap<i64, JoinHandle<()>>>> = OnceLock::new();
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 
 fn runtime() -> Result<&'static Runtime, String> {
-    RUNTIME.get_or_try_init(|| {
+    match RUNTIME.get_or_init(|| {
         Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
             .thread_name("rakhsh-native")
             .build()
             .map_err(|e| format!("create Tokio runtime: {e}"))
-    })
+    }) {
+        Ok(runtime) => Ok(runtime),
+        Err(error) => Err(error.clone()),
+    }
 }
 
 fn tasks() -> &'static Mutex<HashMap<i64, JoinHandle<()>>> {
